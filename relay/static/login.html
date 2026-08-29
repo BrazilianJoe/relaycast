@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>relaycast login</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <style>
+    .login { max-width: 22rem; margin: 12vh auto; }
+    .login form { display: grid; gap: 0.7rem; }
+    .err { color: var(--bad); font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <section class="panel login">
+    <h1>relaycast</h1>
+    <p class="hint">Admin login. User and password are in <code>.env</code>.</p>
+    <p class="err" id="err" hidden>Wrong user or password.</p>
+    <form method="post" action="/login">
+      <label>user <input name="username" type="text" autocomplete="username" required /></label>
+      <label>password <input name="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">open</button>
+    </form>
+  </section>
+  <script>
+    if (new URLSearchParams(location.search).get("err")) document.getElementById("err").hidden = false;
+  </script>
+</body>
+</html>

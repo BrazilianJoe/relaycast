@@ -37,8 +37,9 @@ body {
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--line);
 }
-.pill.on { color: var(--live); border-color: var(--live); }
+.pill.on { color: var(--live); border-color: var(--live); background: #3ecf8e22; }
 .pill.off { color: var(--off); }
+.pill.hold { color: var(--amber); border-color: var(--amber); background: #e0a14a22; }
 
 main {
   display: grid;
@@ -118,8 +119,23 @@ input[type="text"], input[type="password"] {
 }
 .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--off); }
 .dot.push { background: var(--live); }
+.dot.hold { background: var(--amber); }
 .dot.err { background: var(--bad); }
-.row-actions { display: flex; gap: 0.4rem; margin-top: 0.55rem; }
+.row-actions { display: flex; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
+.modes { display: flex; gap: 0.25rem; }
+.modes button.on { border-color: var(--amber); color: var(--amber); }
+.modes button[data-mode="live"].on { border-color: var(--live); color: var(--live); }
+.hold-box { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--line); }
+.hold-box .file { display: grid; gap: 0.3rem; margin-top: 0.7rem; font-size: 0.75rem; color: var(--muted); }
+.auto-hold { margin: 0.65rem 0 0; }
+#standby-img, #standby-vid {
+  width: 100%;
+  margin-top: 0.55rem;
+  max-height: 10rem;
+  object-fit: contain;
+  background: #000;
+  border: 1px solid var(--line);
+}
 
 dialog {
   background: var(--panel);

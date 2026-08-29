@@ -21,22 +21,43 @@
   <main>
     <section class="panel ingest">
       <h1>Ingest</h1>
-      <p class="hint">OBS encodes on your PC. This box only copies packets — no transcode. From Brazil, prefer SRT.</p>
+      <p class="hint">Destinations can stay off. If the header says <em>live</em>, Action! is already hitting this box.</p>
       <dl class="kv">
         <dt>Status</dt><dd id="st-live">—</dd>
         <dt>Tracks</dt><dd id="st-tracks">—</dd>
+        <dt>Received</dt><dd id="st-bytes">—</dd>
         <dt>Server</dt><dd id="st-mtx">—</dd>
       </dl>
       <div class="copy-row">
-        <label>RTMP <button type="button" data-copy="rtmp">copy</button></label>
-        <code id="rtmpUrl"></code>
+        <label>Action! server / URL <button type="button" data-copy="rtmpServer">copy</button></label>
+        <code id="rtmpServer"></code>
+      </div>
+      <div class="copy-row">
+        <label>Action! stream key <button type="button" data-copy="rtmpKey">copy</button></label>
+        <code id="rtmpKey"></code>
       </div>
       <div class="copy-row">
         <label>SRT <button type="button" data-copy="srt">copy</button></label>
         <code id="srtUrl"></code>
       </div>
-      <p class="obs">OBS: Service <em>Custom</em>. RTMP server = the RTMP line, stream key empty. SRT: paste the SRT line as the server URL.</p>
+      <p class="obs">Action!: LIVE tab → service <em>Custom</em> (not Twitch). Paste server / URL and stream key above. Enable auto-reconnect. 1080p CBR ~6000 kbps, 2s keyframes if the encoder exposes GOP.</p>
       <video id="preview" muted autoplay playsinline controls></video>
+      <div class="hold-box">
+        <h1>Hold</h1>
+        <p class="hint">Keeps platforms online with a looping still or clip. Live Action! stays copy-only; only the slate is encoded.</p>
+        <div class="row-actions">
+          <button type="button" id="hold-all">hold all</button>
+          <button type="button" id="resume-all">resume all</button>
+        </div>
+        <label class="toggle auto-hold"><input type="checkbox" id="auto-hold" /> if Action! drops, auto-hold</label>
+        <label class="file">slate (image or short clip)
+          <input type="file" id="standby-file" accept="image/png,image/jpeg,image/webp,.gif,video/mp4,video/webm,video/quicktime" />
+        </label>
+        <div id="standby-meta" class="meta">No file: default STAND BY card.</div>
+        <img id="standby-img" alt="slate" hidden />
+        <video id="standby-vid" muted loop playsinline controls hidden></video>
+        <button type="button" id="standby-clear" hidden>clear slate</button>
+      </div>
     </section>
 
     <section class="panel dests">
