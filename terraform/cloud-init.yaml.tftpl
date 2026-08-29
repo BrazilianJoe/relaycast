@@ -1,0 +1,31 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+
+write_files:
+  - path: /etc/sysctl.d/99-relaycast.conf
+    content: |
+      net.core.rmem_max = 26214400
+      net.core.wmem_max = 26214400
+  - path: /opt/relaycast.env
+    permissions: "0600"
+    content: |
+      PUBLISH_KEY=${publish_key}
+      ADMIN_USER=${admin_user}
+      ADMIN_PASSWORD=${admin_password}
+      PUBLIC_HOST=
+      MEDIAMTX_API=http://mediamtx:9997
+      MEDIAMTX_RTMP=rtmp://mediamtx:1935
+
+runcmd:
+  - sysctl --system
+  - curl -fsSL https://get.docker.com | sh
+  - git clone --depth 1 --branch ${git_ref} ${git_repo} /opt/relaycast
+  - cp /opt/relaycast.env /opt/relaycast/.env
+  - PUBLIC_IP=$(curl -fsS https://ifconfig.me/ip || true)
+  - if [ -n "$PUBLIC_IP" ]; then sed -i "s|^PUBLIC_HOST=.*|PUBLIC_HOST=$PUBLIC_IP|" /opt/relaycast/.env; fi
+  - cd /opt/relaycast && docker compose up -d --build
+  - cd /opt/relaycast && docker compose ps

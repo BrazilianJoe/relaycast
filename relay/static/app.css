@@ -1,0 +1,133 @@
+:root {
+  --bg: #100e0c;
+  --panel: #1a1714;
+  --ink: #efe8dc;
+  --muted: #9a8f82;
+  --line: #2c2722;
+  --amber: #e0a14a;
+  --live: #3ecf8e;
+  --bad: #e25b4a;
+  --off: #6b635b;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body {
+  font: 15px/1.45 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; gap: 0.75rem; align-items: center; }
+.brand .sub { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.04em; }
+.mark {
+  width: 0.7rem; height: 0.7rem; border-radius: 50%;
+  background: var(--amber); box-shadow: 0 0 0 4px #e0a14a22;
+}
+.pill {
+  font: 700 0.75rem/1 ui-monospace, "Cascadia Code", monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+}
+.pill.on { color: var(--live); border-color: var(--live); }
+.pill.off { color: var(--off); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(18rem, 22rem) 1fr;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem 2rem;
+}
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 1.1rem 1.15rem 1.25rem;
+}
+h1, h2 { font-size: 0.92rem; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 0.7rem; }
+.hint, .obs { color: var(--muted); font-size: 0.88rem; }
+.obs em { color: var(--ink); font-style: normal; }
+
+.kv { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.25rem 0.6rem; margin: 1rem 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.85rem; }
+
+.copy-row { margin-bottom: 0.7rem; }
+.copy-row label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+.copy-row code {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.5rem;
+  background: #0c0a09;
+  border: 1px solid var(--line);
+  font: 0.72rem/1.35 ui-monospace, "Cascadia Code", monospace;
+  word-break: break-all;
+  color: var(--amber);
+}
+button {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  font: inherit;
+}
+button:hover { border-color: var(--amber); color: var(--amber); }
+
+#preview {
+  width: 100%;
+  margin-top: 0.9rem;
+  background: #000;
+  aspect-ratio: 16/9;
+  border: 1px solid var(--line);
+}
+
+.dest-head { display: flex; justify-content: space-between; align-items: center; }
+.card {
+  border-top: 1px solid var(--line);
+  padding: 0.9rem 0 1rem;
+}
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.name { font-weight: 650; }
+.meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.15rem; }
+.meta.err { color: var(--bad); }
+.fields { display: grid; gap: 0.45rem; margin-top: 0.7rem; }
+.fields label { font-size: 0.75rem; color: var(--muted); display: grid; gap: 0.2rem; }
+input[type="text"], input[type="password"] {
+  background: #0c0a09;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 0.4rem 0.5rem;
+  font: 0.85rem ui-monospace, "Cascadia Code", monospace;
+}
+.toggle {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--off); }
+.dot.push { background: var(--live); }
+.dot.err { background: var(--bad); }
+.row-actions { display: flex; gap: 0.4rem; margin-top: 0.55rem; }
+
+dialog {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 1rem;
+  width: min(28rem, 92vw);
+}
+dialog::backdrop { background: #0008; }
+dialog form { display: grid; gap: 0.6rem; }
+dialog menu { display: flex; justify-content: flex-end; gap: 0.4rem; padding: 0; margin: 0.4rem 0 0; }

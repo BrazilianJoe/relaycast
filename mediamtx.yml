@@ -1,0 +1,48 @@
+# Ingest only. Fan-out lives in the relay process so destinations
+# can be toggled without rewriting this file.
+logLevel: info
+logDestinations: [stdout]
+
+api: yes
+apiAddress: :9997
+
+metrics: yes
+metricsAddress: :9998
+
+rtsp: no
+webrtc: no
+moq: no
+
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigins: ["*"]
+hlsVariant: lowLatency
+hlsSegmentCount: 4
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsMuxerCloseAfter: 15s
+
+rtmp: yes
+rtmpAddress: :1935
+
+srt: yes
+srtAddress: :8890
+
+# Publish is gated by relay (/internal/auth) using PUBLISH_KEY as the path.
+# API/metrics stay local to the compose network (ports are not published).
+# Read is open so FFmpeg and the HLS preview can pull the live path.
+authMethod: http
+authHTTPAddress: http://relay:8080/internal/auth
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: read
+  - action: playback
+
+pathDefaults:
+  source: publisher
+  record: no
+  overridePublisher: yes
+
+paths:
+  all_others:

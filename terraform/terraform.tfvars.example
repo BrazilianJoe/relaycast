@@ -1,0 +1,20 @@
+tenancy_ocid      = "ocid1.tenancy.oc1..example"
+user_ocid         = "ocid1.user.oc1..example"
+fingerprint       = "aa:bb:cc:..."
+private_key_path  = "~/.oci/oci_api_key.pem"
+compartment_ocid  = "ocid1.tenancy.oc1..example"
+ssh_public_key    = "ssh-ed25519 AAAA... you@home"
+region            = "us-ashburn-1"
+
+# Optional. Leave empty to auto-pick the first AD and latest Ubuntu 24.04 ARM image.
+# availability_domain = "US-ASHBURN-AD-1"
+# image_ocid          = ""
+
+# Always Free Ampere. 1 OCPU / 6 GB is enough for five copy-only restreams.
+# ocpus      = 1
+# memory_gbs = 6
+
+# Tighten these to your home IPs when you can.
+# ssh_cidr    = "200.x.x.x/32"
+# admin_cidr  = "200.x.x.x/32"
+# ingest_cidr = "0.0.0.0/0"

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>relaycast</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark"></span>
+      <div>
+        <strong>relaycast</strong>
+        <div class="sub">ingest once · copy out</div>
+      </div>
+    </div>
+    <div id="pill" class="pill off">standby</div>
+  </header>
+
+  <main>
+    <section class="panel ingest">
+      <h1>Ingest</h1>
+      <p class="hint">OBS encodes on your PC. This box only copies packets — no transcode. From Brazil, prefer SRT.</p>
+      <dl class="kv">
+        <dt>Status</dt><dd id="st-live">—</dd>
+        <dt>Tracks</dt><dd id="st-tracks">—</dd>
+        <dt>Server</dt><dd id="st-mtx">—</dd>
+      </dl>
+      <div class="copy-row">
+        <label>RTMP <button type="button" data-copy="rtmp">copy</button></label>
+        <code id="rtmpUrl"></code>
+      </div>
+      <div class="copy-row">
+        <label>SRT <button type="button" data-copy="srt">copy</button></label>
+        <code id="srtUrl"></code>
+      </div>
+      <p class="obs">OBS: Service <em>Custom</em>. RTMP server = the RTMP line, stream key empty. SRT: paste the SRT line as the server URL.</p>
+      <video id="preview" muted autoplay playsinline controls></video>
+    </section>
+
+    <section class="panel dests">
+      <div class="dest-head">
+        <h1>Destinations</h1>
+        <button type="button" id="add-btn">+ custom RTMP</button>
+      </div>
+      <div id="dest-list"></div>
+    </section>
+  </main>
+
+  <dialog id="add-dlg">
+    <form id="add-form" method="dialog">
+      <h2>Custom destination</h2>
+      <label>id <input name="id" required pattern="[a-z0-9][a-z0-9_-]{1,40}" placeholder="facebook" /></label>
+      <label>name <input name="name" placeholder="Facebook" /></label>
+      <label>ingest URL <input name="ingest" required placeholder="rtmps://live-api-s.facebook.com:443/rtmp" /></label>
+      <menu>
+        <button value="cancel" type="submit">cancel</button>
+        <button id="add-save" value="default" type="submit">add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

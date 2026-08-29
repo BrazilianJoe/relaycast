@@ -1,0 +1,13 @@
+.env
+data/*
+!data/.gitkeep
+__pycache__/
+*.pyc
+.pytest_cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+.DS_Store
+*.swp
