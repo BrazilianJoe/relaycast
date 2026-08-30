@@ -27,12 +27,12 @@ variable "shape" {
 
 variable "ocpus" {
   type    = number
-  default = 1
+  default = 2
 }
 
 variable "memory_gbs" {
   type    = number
-  default = 6
+  default = 4
 }
 
 variable "git_repo" {

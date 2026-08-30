@@ -82,6 +82,7 @@ class DestState:
     restarts: int = 0
     last_error: str = ""
     last_start: float | None = None
+    stopping: bool = False
     mode: str = ""
     source: str = ""
     target: str = ""
@@ -140,35 +141,46 @@ class Fanout:
             plan[dest_id] = (mode, source, target)
 
         with self._lock:
-            if any(mode == "hold" for mode, _, _ in plan.values()):
-                self._ensure_slate(standby_file)
-            else:
-                self._stop_slate()
+            need_hold = any(mode == "hold" for mode, _, _ in plan.values())
 
             for dest_id in list(self._procs):
                 if dest_id not in plan:
                     self._stop(dest_id)
 
+            restart: list[tuple[str, bool]] = []
             for dest_id, (mode, source, target) in plan.items():
-                dest = by_id[dest_id]
                 st = self._state.setdefault(dest_id, DestState())
                 proc = self._procs.get(dest_id)
                 alive = proc is not None and proc.poll() is None
                 size = self._kick_size if (kick_target(dest_id, target) and mode == "live") else ""
                 if alive and st.mode == mode and st.source == source and st.target == target and st.kick_size == size:
                     continue
+                force = False
                 if proc is not None:
                     if alive:
                         self._stop(dest_id)
+                        force = True
                     else:
                         self._note_exit(dest_id, proc)
-                self._start(dest_id, dest, mode, source, force=alive)
+                restart.append((dest_id, force))
+
+            started_slate = False
+            if need_hold:
+                started_slate = self._ensure_slate(standby_file)
+            else:
+                self._stop_slate()
+            if started_slate:
+                time.sleep(0.4)
+
+            for dest_id, force in restart:
+                mode, source, _target = plan[dest_id]
+                self._start(dest_id, by_id[dest_id], mode, source, force=force)
 
     def stop_all(self) -> None:
         with self._lock:
-            self._stop_slate()
             for dest_id in list(self._procs):
                 self._stop(dest_id)
+            self._stop_slate()
 
     def _start(self, dest_id: str, dest: dict, mode: str, source: str, force: bool = False) -> None:
         target = join_rtmp(dest.get("ingest", ""), dest.get("key", ""))
@@ -179,10 +191,12 @@ class Fanout:
         url = f"{SOURCE_BASE.rstrip('/')}/{source}"
         size = self._kick_size if (kick_target(dest_id, target) and mode == "live") else ""
         cmd = _ffmpeg_out(url, target, dest_id, mode, size)
-        if not self._spawn(dest_id, cmd, st):
+        if not self._spawn(dest_id, cmd, st, nice=(-10 if size else 0)):
             return
         proc = self._procs[dest_id]
         st.running = True
+        st.stopping = False
+        st.last_error = ""
         st.pid = proc.pid
         st.last_start = time.time()
         st.mode = mode
@@ -195,11 +209,11 @@ class Fanout:
         st.lines.append(f"{mode} {kind} pid={proc.pid} src={source}")
         threading.Thread(target=self._drain, args=(dest_id, proc), daemon=True).start()
 
-    def _ensure_slate(self, standby_file: Path | None) -> None:
+    def _ensure_slate(self, standby_file: Path | None) -> bool:
         key = str(standby_file) if standby_file and standby_file.is_file() else "lavfi"
         proc = self._slate
         if proc is not None and proc.poll() is None and self._slate_key == key:
-            return
+            return False
         self._stop_slate()
         cmd = _slate_cmd(standby_file)
         try:
@@ -210,9 +224,11 @@ class Fanout:
                 stderr=subprocess.DEVNULL,
             )
             self._slate_key = key
+            return True
         except OSError:
             self._slate = None
             self._slate_key = ""
+            return False
 
     def _stop_slate(self) -> None:
         proc = self._slate
@@ -228,7 +244,14 @@ class Fanout:
                 proc.kill()
                 proc.wait(timeout=2)
 
-    def _spawn(self, dest_id: str, cmd: list[str], st: DestState) -> bool:
+    def _spawn(self, dest_id: str, cmd: list[str], st: DestState, nice: int = 0) -> bool:
+        def _preexec() -> None:
+            if nice:
+                try:
+                    os.nice(nice)
+                except OSError:
+                    pass
+
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -237,6 +260,7 @@ class Fanout:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                preexec_fn=_preexec if nice else None,
             )
         except OSError as exc:
             st.last_error = str(exc)
@@ -256,6 +280,8 @@ class Fanout:
                 with self._lock:
                     st = self._state.setdefault(dest_id, DestState())
                     st.lines.append(redact(line))
+                    if st.stopping:
+                        continue
                     if "error" in line.lower() or "failed" in line.lower():
                         st.last_error = redact(line[-300:])
         except Exception:
@@ -274,12 +300,14 @@ class Fanout:
     def _stop(self, dest_id: str) -> None:
         proc = self._procs.pop(dest_id, None)
         st = self._state.setdefault(dest_id, DestState())
+        st.stopping = True
         st.running = False
         st.pid = None
         st.mode = ""
         st.source = ""
         st.transcode = False
         st.kick_size = ""
+        st.last_error = ""
         if proc is None:
             return
         if proc.poll() is None:
@@ -289,6 +317,7 @@ class Fanout:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=2)
+        st.last_error = ""
         st.lines.append("stopped")
 
 

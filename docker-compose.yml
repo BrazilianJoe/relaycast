@@ -26,6 +26,9 @@ services:
       timeout: 3s
       retries: 12
       start_period: 8s
+    cpu_shares: 4096
+    cap_add:
+      - SYS_NICE
     networks:
       - cast
 
@@ -62,8 +65,10 @@ services:
       FF_OPEN_URL: https://rumble.com
     volumes:
       - firefox_data:/config
-    shm_size: "1gb"
+    shm_size: "256m"
     mem_limit: 1536m
+    cpus: "0.6"
+    cpu_shares: 128
     security_opt:
       - seccomp:unconfined
     networks:

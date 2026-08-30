@@ -98,7 +98,7 @@ function metaOf(d) {
   const size = kickSizeOf(lastStatus, d);
   if (sending === "hold") return d.hold ? "holding · slate" : "holding · Action! down";
   if (d.pushing) return d.transcode ? `transcoding Kick · ${size}` : "copying to platform";
-  if (d.last_error) return d.last_error;
+  if (d.last_error && d.enabled) return d.last_error;
   if (sending === "live") return d.transcode ? `transcoding Kick · ${size}…` : "connecting…";
   if (!d.has_ingest || !d.has_key) return "set URL and key in edit";
   if (d.enabled) return "waiting for ingest";

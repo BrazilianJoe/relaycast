@@ -10,9 +10,9 @@ region            = "us-ashburn-1"
 # availability_domain = "US-ASHBURN-AD-1"
 # image_ocid          = ""
 
-# Always Free Ampere. 1 OCPU / 6 GB is enough for five copy-only restreams.
-# ocpus      = 1
-# memory_gbs = 6
+# Always Free Ampere. 2 OCPU / 4 GB: Kick transcode plus a capped US Firefox.
+# ocpus      = 2
+# memory_gbs = 4
 
 # Tighten these to your home IPs when you can.
 # ssh_cidr    = "200.x.x.x/32"
