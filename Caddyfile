@@ -1,4 +1,45 @@
 relaycast.brazooka.games {
-  encode gzip
-  reverse_proxy relay:8080
+  redir /rumble/desktop /rumble/desktop/ 308
+
+  @rumble_ws {
+    path /rumble/desktop/websockify /rumble/desktop/websockify* /rumble/desktop/websockify-audio* /rumble/desktop/ws-filemanager* /rumble/desktop/ws-notification* /rumble/desktop/ws-terminal*
+  }
+  handle @rumble_ws {
+    uri strip_prefix /rumble/desktop
+    reverse_proxy firefox:5800 {
+      flush_interval -1
+      header_down -X-Frame-Options
+      header_down -Content-Security-Policy
+      transport http {
+        read_timeout 0
+        write_timeout 0
+        versions 1.1
+      }
+    }
+  }
+
+  handle /rumble/desktop/* {
+    header Permissions-Policy "clipboard-read=(self), clipboard-write=(self)"
+    forward_auth relay:8080 {
+      uri /auth/check
+      header_up X-Forwarded-Uri {uri}
+    }
+    uri strip_prefix /rumble/desktop
+    reverse_proxy firefox:5800 {
+      flush_interval -1
+      header_up X-Forwarded-Proto https
+      header_down -X-Frame-Options
+      header_down -Content-Security-Policy
+      transport http {
+        read_timeout 0
+        write_timeout 0
+        versions 1.1
+      }
+    }
+  }
+
+  handle {
+    encode gzip
+    reverse_proxy relay:8080
+  }
 }

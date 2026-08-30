@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>rumble · relaycast</title>
+  <link rel="stylesheet" href="/static/app.css?v=6" />
+</head>
+<body class="rumble-page">
+  <header class="rumble-bar">
+    <a href="/" class="back">relaycast</a>
+    <p class="rumble-hint">Copy on this PC, click the desktop, paste with Ctrl+V. Copy in Rumble, then Ctrl+C lands on this PC.</p>
+    <button type="button" id="arm">enable clipboard</button>
+    <details class="rumble-fallback">
+      <summary>manual</summary>
+      <label class="clip-wrap">clipboard
+        <textarea id="clip" rows="2" placeholder="Fallback if the browser blocks clipboard access."></textarea>
+      </label>
+      <div class="clip-actions">
+        <button type="button" id="send">send in</button>
+        <button type="button" id="grab">grab out</button>
+      </div>
+    </details>
+  </header>
+  <iframe
+    id="desk"
+    title="Rumble Firefox"
+    src="/rumble/desktop/"
+    allow="clipboard-read; clipboard-write"
+  ></iframe>
+  <p id="clip-status" class="rumble-status" hidden></p>
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const desk = $("#desk");
+    const clip = $("#clip");
+    const status = $("#clip-status");
+    const armBtn = $("#arm");
+    let armed = false;
+    let lastRemote = "";
+    let pasteLock = false;
+
+    function note(msg) {
+      status.hidden = !msg;
+      status.textContent = msg || "";
+    }
+
+    function iframeDoc() {
+      try { return desk.contentDocument; } catch { return null; }
+    }
+
+    function iframeWin() {
+      try { return desk.contentWindow; } catch { return null; }
+    }
+
+    function clipEl() {
+      const doc = iframeDoc();
+      return doc && doc.getElementById("noVNC_clipboard_text");
+    }
+
+    function isField(el) {
+      const tag = (el && el.tagName) || "";
+      return tag === "TEXTAREA" || tag === "INPUT" || (el && el.isContentEditable);
+    }
+
+    async function readPC() {
+      const win = iframeWin();
+      const errs = [];
+      for (const nav of [win && win.navigator, navigator]) {
+        if (!nav || !nav.clipboard || !nav.clipboard.readText) continue;
+        try { return await nav.clipboard.readText(); } catch (e) { errs.push(e); }
+      }
+      throw errs[0] || new Error("clipboard read blocked");
+    }
+
+    async function writePC(text) {
+      const win = iframeWin();
+      for (const nav of [win && win.navigator, navigator]) {
+        if (!nav || !nav.clipboard || !nav.clipboard.writeText) continue;
+        try {
+          await nav.clipboard.writeText(text);
+          return true;
+        } catch { /* try next */ }
+      }
+      return false;
+    }
+
+    function pushRemote(text) {
+      const el = clipEl();
+      if (!el) return false;
+      lastRemote = text;
+      el.value = text;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      clip.value = text;
+      return true;
+    }
+
+    function pullRemote() {
+      const el = clipEl();
+      return el ? (el.value || "") : "";
+    }
+
+    function fireKey(target, type, opts) {
+      target.dispatchEvent(new KeyboardEvent(type, {
+        key: opts.key,
+        code: opts.code,
+        keyCode: opts.keyCode,
+        which: opts.keyCode,
+        ctrlKey: !!opts.ctrl,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: iframeWin(),
+      }));
+    }
+
+    function synthCtrlV() {
+      const doc = iframeDoc();
+      if (!doc) return;
+      const canvas = doc.querySelector("canvas") || doc;
+      fireKey(canvas, "keydown", { key: "Control", code: "ControlLeft", keyCode: 17, ctrl: true });
+      fireKey(canvas, "keydown", { key: "v", code: "KeyV", keyCode: 86, ctrl: true });
+      fireKey(canvas, "keyup", { key: "v", code: "KeyV", keyCode: 86, ctrl: true });
+      fireKey(canvas, "keyup", { key: "Control", code: "ControlLeft", keyCode: 17, ctrl: false });
+    }
+
+    function disableHostSync(doc) {
+      const el = doc.getElementById("noVNC_setting_host_clipboard_sync");
+      if (!el || !el.checked) return;
+      el.checked = false;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function watchRemoteBox(box) {
+      if (!box || box.dataset.rcWatch) return;
+      box.dataset.rcWatch = "1";
+      const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+      if (!desc || !desc.get || !desc.set) return;
+      Object.defineProperty(box, "value", {
+        configurable: true,
+        get() { return desc.get.call(this); },
+        set(v) {
+          desc.set.call(this, v);
+          if (v === lastRemote) return;
+          lastRemote = v || "";
+          clip.value = lastRemote;
+          if (lastRemote) writePC(lastRemote);
+        },
+      });
+    }
+
+    async function arm() {
+      try {
+        const text = await readPC();
+        armed = true;
+        armBtn.classList.add("on");
+        armBtn.textContent = "clipboard on";
+        note("Clipboard linked. Ctrl+C / Ctrl+V in the desktop use this PC.");
+        return text;
+      } catch {
+        armed = false;
+        armBtn.classList.remove("on");
+        armBtn.textContent = "enable clipboard";
+        note("Allow clipboard for relaycast.brazooka.games, then click enable again.");
+        return null;
+      }
+    }
+
+    async function pasteFromPC() {
+      if (pasteLock) return;
+      pasteLock = true;
+      try {
+        let text = "";
+        try {
+          text = await readPC();
+          if (!armed) {
+            armed = true;
+            armBtn.classList.add("on");
+            armBtn.textContent = "clipboard on";
+          }
+        } catch {
+          note("Click Enable clipboard, allow access, then paste again.");
+          return;
+        }
+        if (!pushRemote(text)) {
+          note("Desktop still loading — wait a second and paste again.");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 140));
+        synthCtrlV();
+        note("");
+      } finally {
+        pasteLock = false;
+      }
+    }
+
+    function grabAfterCopy() {
+      const before = pullRemote();
+      let n = 0;
+      const t = setInterval(() => {
+        n += 1;
+        const now = pullRemote();
+        if (now && now !== before) {
+          clearInterval(t);
+          lastRemote = now;
+          clip.value = now;
+          writePC(now);
+        } else if (n > 25) {
+          clearInterval(t);
+        }
+      }, 80);
+    }
+
+    function hook() {
+      const doc = iframeDoc();
+      const win = iframeWin();
+      if (!doc || !win || !doc.documentElement) return false;
+      if (doc.documentElement.dataset.rcClip === "1") return true;
+      disableHostSync(doc);
+      doc.documentElement.dataset.rcClip = "1";
+      watchRemoteBox(clipEl());
+
+      doc.addEventListener("keydown", (ev) => {
+        if (!ev.isTrusted || isField(ev.target)) return;
+        const mod = ev.ctrlKey || ev.metaKey;
+        if (!mod || ev.altKey) return;
+        const paste = ev.code === "KeyV" || ev.key === "v" || ev.key === "V";
+        const copy = ev.code === "KeyC" || ev.code === "KeyX";
+        if (paste) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          if (!ev.repeat) pasteFromPC();
+          return;
+        }
+        if (copy && !ev.repeat) grabAfterCopy();
+      }, true);
+
+      doc.addEventListener("keyup", (ev) => {
+        if (!ev.isTrusted || isField(ev.target)) return;
+        if (!(ev.ctrlKey || ev.metaKey)) return;
+        if (ev.code === "KeyV" || ev.key === "v" || ev.key === "V") {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+        }
+      }, true);
+
+      doc.addEventListener("pointerdown", () => {
+        if (!armed) arm();
+        disableHostSync(doc);
+      }, true);
+
+      const mo = new MutationObserver(() => {
+        disableHostSync(doc);
+        watchRemoteBox(clipEl());
+      });
+      if (doc.body) mo.observe(doc.body, { childList: true, subtree: true });
+
+      return true;
+    }
+
+    function send() {
+      if (!pushRemote(clip.value)) {
+        note("Desktop still loading — wait a second.");
+        return;
+      }
+      note("Sent into the US Firefox clipboard. Click the field in Rumble and press Ctrl+V.");
+    }
+
+    function grab() {
+      const text = pullRemote();
+      clip.value = text;
+      if (text) writePC(text);
+      note(text ? "Copied out." : "Remote clipboard is empty. Copy in Rumble first, then Grab.");
+    }
+
+    armBtn.onclick = arm;
+    $("#send").onclick = send;
+    $("#grab").onclick = grab;
+    clip.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        send();
+      }
+    });
+
+    function startHooking() {
+      let n = 0;
+      const t = setInterval(() => {
+        n += 1;
+        if (hook() || n > 40) clearInterval(t);
+      }, 250);
+    }
+    desk.addEventListener("load", startHooking);
+    startHooking();
+  </script>
+</body>
+</html>

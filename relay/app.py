@@ -10,7 +10,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -200,11 +200,18 @@ def _tls(request: Request) -> bool:
     return proto.lower() == "https"
 
 
+def _safe_next(raw: str) -> str:
+    path = (raw or "").strip()
+    if not path.startswith("/") or path.startswith("//") or "\\" in path or ":" in path:
+        return "/"
+    return path
+
+
 @app.middleware("http")
 async def gate(request: Request, call_next):
     path = request.url.path
     if (
-        path in ("/api/health", "/login")
+        path in ("/api/health", "/login", "/auth/check")
         or path.startswith("/internal/")
         or path == "/static/app.css"
     ):
@@ -214,17 +221,43 @@ async def gate(request: Request, call_next):
     elif not _authed(request):
         if path.startswith("/api/"):
             return _unauthorized()
+        nxt = _safe_next(path)
+        if nxt != "/":
+            return RedirectResponse(f"/login?next={quote(nxt, safe='/?')}", status_code=302)
         return RedirectResponse("/login", status_code=302)
     else:
         response = await call_next(request)
-    if path in ("/", "/login") or path.startswith("/static/"):
+    if path in ("/", "/login") or path.startswith("/static/") or path.startswith("/rumble"):
         response.headers["Cache-Control"] = "no-store"
+    if path.startswith("/rumble"):
+        response.headers["Permissions-Policy"] = "clipboard-read=(self), clipboard-write=(self)"
     return response
+
+
+@app.get("/auth/check")
+def auth_check(request: Request) -> Response:
+    """Caddy forward_auth for /rumble. 204 if the admin cookie is valid."""
+    if _authed(request):
+        return Response(status_code=204)
+    nxt = _safe_next(request.headers.get("x-forwarded-uri") or "/rumble")
+    return RedirectResponse(f"/login?next={quote(nxt, safe='/?')}", status_code=302)
 
 
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/rumble")
+@app.get("/rumble/")
+def rumble_page() -> FileResponse:
+    return FileResponse(
+        STATIC / "rumble.html",
+        headers={
+            "Cache-Control": "no-store",
+            "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
+        },
+    )
 
 
 @app.get("/login")
@@ -239,9 +272,13 @@ async def login_submit(request: Request):
     password = (data.get("password") or [""])[0]
     ok_user = secrets.compare_digest(user, ADMIN_USER)
     ok_pass = secrets.compare_digest(password, ADMIN_PASSWORD)
+    nxt = _safe_next((data.get("next") or ["/"])[0])
     if not (ok_user and ok_pass):
-        return RedirectResponse("/login?err=1", status_code=303)
-    resp = RedirectResponse("/", status_code=303)
+        err = "/login?err=1"
+        if nxt != "/":
+            err += f"&next={quote(nxt, safe='/?')}"
+        return RedirectResponse(err, status_code=303)
+    resp = RedirectResponse(nxt, status_code=303)
     resp.set_cookie(
         COOKIE,
         _cookie_token(),

@@ -19,13 +19,17 @@
     <p class="hint">Admin sign-in.</p>
     <p class="err" id="err" hidden>Wrong user or password.</p>
     <form method="post" action="/login">
+      <input type="hidden" name="next" id="next" value="/" />
       <label>user <input name="username" type="text" autocomplete="username" required /></label>
       <label>password <input name="password" type="password" autocomplete="current-password" required /></label>
       <button type="submit">open</button>
     </form>
   </section>
   <script>
-    if (new URLSearchParams(location.search).get("err")) document.getElementById("err").hidden = false;
+    const q = new URLSearchParams(location.search);
+    if (q.get("err")) document.getElementById("err").hidden = false;
+    const next = q.get("next") || "/";
+    if (next.startsWith("/") && !next.startsWith("//")) document.getElementById("next").value = next;
   </script>
 </body>
 </html>

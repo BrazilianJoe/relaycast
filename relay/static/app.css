@@ -263,3 +263,78 @@ dialog {
 dialog::backdrop { background: #0008; }
 dialog form { display: grid; gap: 0.6rem; }
 dialog menu { display: flex; justify-content: flex-end; gap: 0.4rem; padding: 0; margin: 0.4rem 0 0; }
+
+.rumble-page { min-height: 100vh; display: flex; flex-direction: column; }
+.rumble-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1rem;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.rumble-bar .back {
+  color: var(--amber);
+  text-decoration: none;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+.rumble-hint {
+  flex: 1;
+  margin: 0;
+  min-width: 12rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+#arm.on { color: var(--live); border-color: var(--live); }
+.rumble-fallback summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rumble-fallback[open] {
+  display: grid;
+  gap: 0.4rem;
+  min-width: min(28rem, 90vw);
+}
+.clip-wrap {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.clip-wrap textarea {
+  background: #0c0a09;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 0.4rem 0.5rem;
+  font: 0.85rem ui-monospace, "Cascadia Code", monospace;
+  resize: vertical;
+  min-height: 2.6rem;
+}
+.clip-actions { display: flex; gap: 0.35rem; padding-bottom: 0.15rem; }
+.clip-actions button { padding: 0.45rem 0.65rem; font-weight: 650; }
+#desk {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  min-height: 0;
+  background: #000;
+}
+.rumble-status {
+  margin: 0;
+  padding: 0.35rem 1rem;
+  font-size: 0.8rem;
+  color: var(--amber);
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 720px) {
+  .rumble-bar { flex-direction: column; align-items: stretch; }
+}

@@ -55,8 +55,8 @@ DESTINATIONS = [
         "key": "",
         "enabled": False,
         "hold": False,
-        "help": "Rumble Studio → stream URL + key. Prefer the URL printed in their dashboard if it is region-specific.",
-        "docs": "https://rumble.com/account/livestreams",
+        "help": "Brazil cannot open rumble.com. Use the rumble button (Firefox on this US box), copy Stream URL + key from Studio, paste here. Prefer a static key.",
+        "docs": "/rumble",
         "builtin": True,
     },
 ]

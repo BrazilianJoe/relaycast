@@ -46,6 +46,29 @@ services:
     networks:
       - cast
 
+  firefox:
+    image: jlesage/firefox:latest
+    container_name: relaycast-firefox
+    restart: unless-stopped
+    profiles: ["tls"]
+    environment:
+      USER_ID: "1000"
+      GROUP_ID: "1000"
+      TZ: America/Sao_Paulo
+      KEEP_APP_RUNNING: "1"
+      DISPLAY_WIDTH: "1280"
+      DISPLAY_HEIGHT: "800"
+      WEB_AUDIO: "0"
+      FF_OPEN_URL: https://rumble.com
+    volumes:
+      - firefox_data:/config
+    shm_size: "1gb"
+    mem_limit: 1536m
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - cast
+
   caddy:
     image: caddy:2-alpine
     container_name: relaycast-caddy
@@ -71,3 +94,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  firefox_data:
