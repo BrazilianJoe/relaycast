@@ -4,31 +4,60 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>rumble · relaycast</title>
-  <link rel="stylesheet" href="/static/app.css?v=6" />
+  <link rel="stylesheet" href="/static/app.css?v=10" />
 </head>
-<body class="rumble-page">
-  <header class="rumble-bar">
-    <a href="/" class="back">relaycast</a>
-    <p class="rumble-hint">Copy on this PC, click the desktop, paste with Ctrl+V. Copy in Rumble, then Ctrl+C lands on this PC.</p>
-    <button type="button" id="arm">enable clipboard</button>
-    <details class="rumble-fallback">
-      <summary>manual</summary>
-      <label class="clip-wrap">clipboard
-        <textarea id="clip" rows="2" placeholder="Fallback if the browser blocks clipboard access."></textarea>
-      </label>
-      <div class="clip-actions">
-        <button type="button" id="send">send in</button>
-        <button type="button" id="grab">grab out</button>
+<body class="rumble-page" data-host-tick="1">
+  <header class="top">
+    <a class="brand" href="/">
+      <span class="mark"></span>
+      <div>
+        <strong>relaycast</strong>
+        <div class="sub">rumble · US Firefox</div>
       </div>
-    </details>
+    </a>
+    <div class="meters" aria-label="host load">
+      <div class="meter cpu">
+        <div class="meter-col">
+          <div class="meter-top">
+            <span>cpu <strong id="cpu-pct">—</strong></span>
+            <svg id="cpu-spark" class="spark" viewBox="0 0 60 18" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div id="cpu-cores" class="cores" aria-label="per-core load"></div>
+        </div>
+      </div>
+      <div class="meter mem">
+        <span>mem <strong id="mem-pct">—</strong></span>
+        <svg id="mem-spark" class="spark" viewBox="0 0 60 18" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+    </div>
+    <div class="top-end">
+      <div class="clip-tools">
+        <button type="button" id="arm" title="Copy on this PC, click the desktop, paste with Ctrl+V. Copy in Rumble, then Ctrl+C lands on this PC.">clipboard</button>
+        <details class="rumble-fallback">
+          <summary>manual</summary>
+          <div class="clip-pop">
+            <label class="clip-wrap">clipboard
+              <textarea id="clip" rows="2" placeholder="Fallback if the browser blocks clipboard access."></textarea>
+            </label>
+            <div class="clip-actions">
+              <button type="button" id="send">send in</button>
+              <button type="button" id="grab">grab out</button>
+            </div>
+          </div>
+        </details>
+        <p id="clip-status" class="clip-note" hidden></p>
+      </div>
+      <div id="pill" class="pill off">standby</div>
+    </div>
   </header>
-  <iframe
-    id="desk"
-    title="Rumble Firefox"
-    src="/rumble/desktop/"
-    allow="clipboard-read; clipboard-write"
-  ></iframe>
-  <p id="clip-status" class="rumble-status" hidden></p>
+  <div class="desk-wrap">
+    <iframe
+      id="desk"
+      title="Rumble Firefox"
+      src="/rumble/desktop/"
+      allow="clipboard-read; clipboard-write"
+    ></iframe>
+  </div>
   <script>
     const $ = (s) => document.querySelector(s);
     const desk = $("#desk");
@@ -39,9 +68,17 @@
     let lastRemote = "";
     let pasteLock = false;
 
-    function note(msg) {
+    let noteTimer;
+    function note(msg, sticky) {
+      clearTimeout(noteTimer);
       status.hidden = !msg;
       status.textContent = msg || "";
+      if (msg) {
+        noteTimer = setTimeout(() => {
+          status.hidden = true;
+          status.textContent = "";
+        }, sticky ? 8000 : 4000);
+      }
     }
 
     function iframeDoc() {
@@ -158,13 +195,13 @@
         armed = true;
         armBtn.classList.add("on");
         armBtn.textContent = "clipboard on";
-        note("Clipboard linked. Ctrl+C / Ctrl+V in the desktop use this PC.");
+        note("Clipboard linked");
         return text;
       } catch {
         armed = false;
         armBtn.classList.remove("on");
-        armBtn.textContent = "enable clipboard";
-        note("Allow clipboard for relaycast.brazooka.games, then click enable again.");
+        armBtn.textContent = "clipboard";
+        note("Allow clipboard, then click again.", true);
         return null;
       }
     }
@@ -182,7 +219,7 @@
             armBtn.textContent = "clipboard on";
           }
         } catch {
-          note("Click Enable clipboard, allow access, then paste again.");
+          note("Click clipboard, allow access, then paste again.", true);
           return;
         }
         if (!pushRemote(text)) {
@@ -248,7 +285,6 @@
       }, true);
 
       doc.addEventListener("pointerdown", () => {
-        if (!armed) arm();
         disableHostSync(doc);
       }, true);
 
@@ -296,5 +332,6 @@
     desk.addEventListener("load", startHooking);
     startHooking();
   </script>
+  <script src="/static/host.js?v=1"></script>
 </body>
 </html>
