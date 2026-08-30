@@ -1,5 +1,6 @@
 """FFmpeg fan-out. Destinations copy the ingest bitstream except Kick live,
-which is transcoded so IVS gets a 2s GOP. Hold encodes a looping slate once, then copies."""
+which is transcoded so IVS gets a 2s GOP. Kick live is 720p60 or 1080p60
+ultrafast. Hold encodes a looping slate once, then copies."""
 
 from __future__ import annotations
 
@@ -85,6 +86,7 @@ class DestState:
     source: str = ""
     target: str = ""
     transcode: bool = False
+    kick_size: str = ""
     lines: Deque[str] = field(default_factory=lambda: deque(maxlen=80))
 
 
@@ -94,6 +96,7 @@ class Fanout:
         self._state: dict[str, DestState] = {}
         self._slate: subprocess.Popen | None = None
         self._slate_key = ""
+        self._kick_size = "720p60"
         self._lock = threading.Lock()
 
     def snapshot(self) -> dict[str, dict]:
@@ -108,6 +111,7 @@ class Fanout:
                     "last_start": st.last_start,
                     "mode": st.mode,
                     "transcode": st.transcode,
+                    "kick_size": st.kick_size,
                     "log": list(st.lines)[-12:],
                 }
             return out
@@ -119,7 +123,9 @@ class Fanout:
         destinations: list[dict],
         auto_hold: bool,
         standby_file: Path | None,
+        kick_transcode: str = "720p60",
     ) -> None:
+        self._kick_size = "1080p60" if kick_transcode == "1080p60" else "720p60"
         plan: dict[str, tuple[str, str, str]] = {}
         by_id = {d["id"]: d for d in destinations if "id" in d}
         for dest in destinations:
@@ -148,14 +154,15 @@ class Fanout:
                 st = self._state.setdefault(dest_id, DestState())
                 proc = self._procs.get(dest_id)
                 alive = proc is not None and proc.poll() is None
-                if alive and st.mode == mode and st.source == source and st.target == target:
+                size = self._kick_size if (kick_target(dest_id, target) and mode == "live") else ""
+                if alive and st.mode == mode and st.source == source and st.target == target and st.kick_size == size:
                     continue
                 if proc is not None:
                     if alive:
                         self._stop(dest_id)
                     else:
                         self._note_exit(dest_id, proc)
-                self._start(dest_id, dest, mode, source)
+                self._start(dest_id, dest, mode, source, force=alive)
 
     def stop_all(self) -> None:
         with self._lock:
@@ -163,14 +170,15 @@ class Fanout:
             for dest_id in list(self._procs):
                 self._stop(dest_id)
 
-    def _start(self, dest_id: str, dest: dict, mode: str, source: str) -> None:
+    def _start(self, dest_id: str, dest: dict, mode: str, source: str, force: bool = False) -> None:
         target = join_rtmp(dest.get("ingest", ""), dest.get("key", ""))
         st = self._state.setdefault(dest_id, DestState())
         gap = 8.0 if kick_target(dest_id, target) else 1.5
-        if st.last_start and time.time() - st.last_start < gap:
+        if not force and st.last_start and time.time() - st.last_start < gap:
             return
         url = f"{SOURCE_BASE.rstrip('/')}/{source}"
-        cmd = _ffmpeg_out(url, target, dest_id, mode)
+        size = self._kick_size if (kick_target(dest_id, target) and mode == "live") else ""
+        cmd = _ffmpeg_out(url, target, dest_id, mode, size)
         if not self._spawn(dest_id, cmd, st):
             return
         proc = self._procs[dest_id]
@@ -180,7 +188,8 @@ class Fanout:
         st.mode = mode
         st.source = source
         st.target = target
-        st.transcode = kick_target(dest_id, target) and mode == "live"
+        st.transcode = bool(size)
+        st.kick_size = size
         st.restarts += 1
         kind = "transcode" if st.transcode else "copy"
         st.lines.append(f"{mode} {kind} pid={proc.pid} src={source}")
@@ -270,6 +279,7 @@ class Fanout:
         st.mode = ""
         st.source = ""
         st.transcode = False
+        st.kick_size = ""
         if proc is None:
             return
         if proc.poll() is None:
@@ -286,12 +296,48 @@ def kick_target(dest_id: str, target: str) -> bool:
     return dest_id == "kick" or "global-contribute.live-video.net" in (target or "").lower()
 
 
-def _kick_audio() -> list[str]:
-    return ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+def _kick_threads() -> int:
+    return max(1, os.cpu_count() or 1)
 
 
-def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live") -> list[str]:
-    """Twitch and hold/slate stay copy. Kick live is transcoded for IVS (2s GOP, no B-frames)."""
+def _kick_live_video(size: str) -> list[str]:
+    """720p60 or 1080p60 ultrafast, 2s GOP. Thread count follows guest OCPUs."""
+    n = str(_kick_threads())
+    height = 1080 if size == "1080p60" else 720
+    rate = "6000k" if height == 1080 else "4500k"
+    return [
+        "-threads",
+        n,
+        "-filter:v",
+        f"scale=-2:'min({height},ih)':flags=neighbor,fps=60",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-profile:v",
+        "baseline",
+        "-pix_fmt",
+        "yuv420p",
+        "-bf",
+        "0",
+        "-g",
+        "120",
+        "-keyint_min",
+        "120",
+        "-x264-params",
+        f"scenecut=0:bframes=0:open_gop=0:aud=1:threads={n}:sliced-threads=0",
+        "-b:v",
+        rate,
+        "-maxrate",
+        rate,
+        "-bufsize",
+        rate,
+        "-bsf:v",
+        "dump_extra",
+    ]
+
+
+def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live", kick_size: str = "") -> list[str]:
     cmd = [
         "ffmpeg",
         "-hide_banner",
@@ -308,36 +354,9 @@ def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live") -> l
         "0:a:0?",
     ]
     if kick_target(dest_id, target) and mode == "live":
-        # 1 OCPU Ampere: ultrafast + no B-frames. force_key_frames is fps-agnostic.
-        cmd += [
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-tune",
-            "zerolatency",
-            "-profile:v",
-            "high",
-            "-pix_fmt",
-            "yuv420p",
-            "-bf",
-            "0",
-            "-force_key_frames",
-            "expr:gte(t,n_forced*2)",
-            "-x264-params",
-            "scenecut=0:bframes=0:open_gop=0:aud=1",
-            "-b:v",
-            "6000k",
-            "-maxrate",
-            "6000k",
-            "-bufsize",
-            "6000k",
-            "-bsf:v",
-            "dump_extra",
-            *_kick_audio(),
-        ]
+        cmd += [*_kick_live_video(kick_size or "720p60"), "-c:a", "copy"]
     elif kick_target(dest_id, target):
-        cmd += ["-c:v", "copy", "-bsf:v", "dump_extra", *_kick_audio()]
+        cmd += ["-c:v", "copy", "-bsf:v", "dump_extra", "-c:a", "copy"]
     else:
         cmd += ["-c", "copy"]
     cmd += ["-f", "flv", "-flvflags", "no_duration_filesize", target]
@@ -347,21 +366,22 @@ def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live") -> l
 def _slate_cmd(path: Path | None) -> list[str]:
     target = f"{SOURCE_BASE.rstrip('/')}/{SLATE_PATH}"
     encode = [
-        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
         "-r", "30", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
-        "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
-        "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+        "-b:v", "2000k", "-maxrate", "2000k", "-bufsize", "2000k",
+        "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "2",
         "-f", "flv", "-flvflags", "no_duration_filesize",
         target,
     ]
     head = ["ffmpeg", "-hide_banner", "-nostdin", "-loglevel", "error", "-re"]
+    scale = "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2"
     if path and path.is_file():
         ext = path.suffix.lower()
         if ext in IMAGE_EXT:
             return head + [
                 "-loop", "1", "-framerate", "30", "-i", str(path),
                 "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-                "-tune", "stillimage",
+                "-vf", scale, "-tune", "stillimage",
                 *encode,
             ]
         if ext in VIDEO_EXT:
@@ -369,18 +389,18 @@ def _slate_cmd(path: Path | None) -> list[str]:
             return head + extra + [
                 "-stream_loop", "-1", "-i", str(path),
                 "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-                "-map", "0:v:0", "-map", "1:a:0",
+                "-filter:v", scale, "-map", "0:v:0", "-map", "1:a:0",
                 *encode,
             ]
-    vf = "scale=1920:1080"
+    vf = scale
     if FONT.is_file():
         vf = (
             "drawtext=fontfile="
             + str(FONT)
-            + ":text='STAND BY':fontsize=92:fontcolor=0xe0a14a:x=(w-text_w)/2:y=(h-text_h)/2"
+            + ":text='STAND BY':fontsize=72:fontcolor=0xe0a14a:x=(w-text_w)/2:y=(h-text_h)/2"
         )
     return head + [
-        "-f", "lavfi", "-i", "color=c=0x100e0c:s=1920x1080:r=30",
+        "-f", "lavfi", "-i", "color=c=0x100e0c:s=1280x720:r=30",
         "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
         "-vf", vf,
         *encode,

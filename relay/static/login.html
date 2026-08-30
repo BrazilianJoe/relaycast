@@ -4,17 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>relaycast login</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/app.css?v=2" />
   <style>
     .login { max-width: 22rem; margin: 12vh auto; }
     .login form { display: grid; gap: 0.7rem; }
+    .login label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+    .login button { padding: 0.45rem 0.7rem; justify-self: start; }
     .err { color: var(--bad); font-size: 0.88rem; }
   </style>
 </head>
 <body>
   <section class="panel login">
     <h1>relaycast</h1>
-    <p class="hint">Admin login. User and password are in <code>.env</code>.</p>
+    <p class="hint">Admin sign-in.</p>
     <p class="err" id="err" hidden>Wrong user or password.</p>
     <form method="post" action="/login">
       <label>user <input name="username" type="text" autocomplete="username" required /></label>

@@ -11,13 +11,27 @@ from platforms import DESTINATIONS
 
 DATA_DIR = Path(os.environ.get("RELAY_DATA", "/data"))
 CONFIG_PATH = DATA_DIR / "config.json"
+KICK_SIZES = ("720p60", "1080p60")
+DEFAULT_KICK_TRANSCODE = "720p60"
 
 _lock = threading.Lock()
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,40}$")
 
 
+def kick_transcode(cfg: dict | None = None) -> str:
+    raw = str((cfg or {}).get("kick_transcode") or DEFAULT_KICK_TRANSCODE).strip().lower()
+    if raw in ("1080", "1080p", "1080p60"):
+        return "1080p60"
+    return "720p60"
+
+
 def _seed() -> dict:
-    return {"auto_hold": True, "standby_name": "", "destinations": deepcopy(DESTINATIONS)}
+    return {
+        "auto_hold": True,
+        "standby_name": "",
+        "kick_transcode": DEFAULT_KICK_TRANSCODE,
+        "destinations": deepcopy(DESTINATIONS),
+    }
 
 
 def load() -> dict:
@@ -28,7 +42,11 @@ def load() -> dict:
         return cfg
     with CONFIG_PATH.open() as fh:
         cfg = json.load(fh)
-    return _merge_builtins(cfg)
+    missing = "kick_transcode" not in cfg
+    cfg = _merge_builtins(cfg)
+    if missing:
+        _write(cfg)
+    return cfg
 
 
 def save(cfg: dict) -> None:
@@ -55,17 +73,24 @@ def public_copy(cfg: dict) -> dict:
     out = {
         "auto_hold": bool(cfg.get("auto_hold", True)),
         "standby_name": cfg.get("standby_name") or "",
+        "kick_transcode": kick_transcode(cfg),
         "has_standby": bool(standby_file(cfg)),
         "destinations": [],
     }
     for item in cfg.get("destinations", []):
-        row = dict(item)
-        key = row.get("key") or ""
-        row["has_key"] = bool(key)
-        row["key_tail"] = key[-4:] if len(key) >= 4 else (key if key else "")
-        row["key"] = ""
-        row["hold"] = bool(row.get("hold", False))
-        out["destinations"].append(row)
+        key = item.get("key") or ""
+        out["destinations"].append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name") or item.get("id"),
+                "enabled": bool(item.get("enabled")),
+                "hold": bool(item.get("hold", False)),
+                "has_key": bool(key),
+                "has_ingest": bool(item.get("ingest")),
+                "docs": item.get("docs") or "",
+                "builtin": bool(item.get("builtin")),
+            }
+        )
     return out
 
 
@@ -102,6 +127,7 @@ def _merge_builtins(cfg: dict) -> dict:
     cfg["destinations"] = merged
     cfg.setdefault("auto_hold", True)
     cfg.setdefault("standby_name", "")
+    cfg["kick_transcode"] = kick_transcode(cfg)
     return cfg
 
 

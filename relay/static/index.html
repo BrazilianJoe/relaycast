@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>relaycast</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/app.css?v=4" />
 </head>
 <body>
   <header class="top">
@@ -15,41 +15,66 @@
         <div class="sub">ingest once · copy out</div>
       </div>
     </div>
+    <div class="meters" aria-label="host load">
+      <div class="meter cpu">
+        <div class="meter-col">
+          <div class="meter-top">
+            <span>cpu <strong id="cpu-pct">—</strong></span>
+            <svg id="cpu-spark" class="spark" viewBox="0 0 60 18" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div id="cpu-cores" class="cores" aria-label="per-core load"></div>
+        </div>
+      </div>
+      <div class="meter mem">
+        <span>mem <strong id="mem-pct">—</strong></span>
+        <svg id="mem-spark" class="spark" viewBox="0 0 60 18" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+    </div>
     <div id="pill" class="pill off">standby</div>
   </header>
 
   <main>
+    <section class="panel dests">
+      <div class="dest-head">
+        <h1>Destinations</h1>
+        <div class="dest-tools">
+          <button type="button" id="hold-all">hold all</button>
+          <button type="button" id="resume-all">resume</button>
+          <button type="button" id="add-btn">+ custom</button>
+        </div>
+      </div>
+      <label class="toggle auto-hold"><input type="checkbox" id="auto-hold" /> if Action! drops, auto-hold</label>
+      <div id="dest-list"></div>
+    </section>
+
     <section class="panel ingest">
       <h1>Ingest</h1>
-      <p class="hint">Destinations can stay off. If the header says <em>live</em>, Action! is already hitting this box.</p>
       <dl class="kv">
         <dt>Status</dt><dd id="st-live">—</dd>
         <dt>Tracks</dt><dd id="st-tracks">—</dd>
         <dt>Received</dt><dd id="st-bytes">—</dd>
         <dt>Server</dt><dd id="st-mtx">—</dd>
       </dl>
-      <div class="copy-row">
-        <label>Action! server / URL <button type="button" data-copy="rtmpServer">copy</button></label>
-        <code id="rtmpServer"></code>
-      </div>
-      <div class="copy-row">
-        <label>Action! stream key <button type="button" data-copy="rtmpKey">copy</button></label>
-        <code id="rtmpKey"></code>
-      </div>
-      <div class="copy-row">
-        <label>SRT <button type="button" data-copy="srt">copy</button></label>
-        <code id="srtUrl"></code>
-      </div>
-      <p class="obs">Action!: LIVE tab → service <em>Custom</em> (not Twitch). Paste server / URL and stream key above. Enable auto-reconnect. 1080p CBR ~6000 kbps, 2s keyframes if the encoder exposes GOP.</p>
       <video id="preview" muted autoplay playsinline controls></video>
+      <button type="button" id="conn-toggle">connection</button>
+      <div id="conn-panel" hidden>
+        <div class="copy-row">
+          <label>Action! server / URL <button type="button" data-copy="rtmpServer">copy</button></label>
+          <code id="rtmpServer"></code>
+        </div>
+        <div class="copy-row">
+          <label>Action! stream key <button type="button" data-copy="rtmpKey">copy</button></label>
+          <code>saved · copy to paste into Action!</code>
+        </div>
+        <div class="copy-row">
+          <label>SRT <button type="button" data-copy="srt">copy</button></label>
+          <code>includes the stream key · copy only</code>
+        </div>
+        <p class="obs">Action!: LIVE → Custom (not Twitch). Server / URL + stream key. Auto-reconnect. 1080p CBR ~6000 kbps, 2s keyframes if the encoder exposes GOP.</p>
+      </div>
       <div class="hold-box">
         <h1>Hold</h1>
-        <p class="hint">Keeps platforms online with a looping still or clip. Live Action! stays copy-only except Kick, which is transcoded for IVS. Only the slate is encoded for hold.</p>
-        <div class="row-actions">
-          <button type="button" id="hold-all">hold all</button>
-          <button type="button" id="resume-all">resume all</button>
-        </div>
-        <label class="toggle auto-hold"><input type="checkbox" id="auto-hold" /> if Action! drops, auto-hold</label>
+        <p class="hint" id="kick-hint">Looping still or clip while platforms stay online. Kick live is transcoded; pick 720p60 or 1080p60 on the Kick card. Everything else is copy.</p>
         <label class="file">slate (image or short clip)
           <input type="file" id="standby-file" accept="image/png,image/jpeg,image/webp,.gif,video/mp4,video/webm,video/quicktime" />
         </label>
@@ -58,14 +83,6 @@
         <video id="standby-vid" muted loop playsinline controls hidden></video>
         <button type="button" id="standby-clear" hidden>clear slate</button>
       </div>
-    </section>
-
-    <section class="panel dests">
-      <div class="dest-head">
-        <h1>Destinations</h1>
-        <button type="button" id="add-btn">+ custom RTMP</button>
-      </div>
-      <div id="dest-list"></div>
     </section>
   </main>
 
@@ -83,6 +100,6 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=12"></script>
 </body>
 </html>

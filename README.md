@@ -16,7 +16,7 @@ OBS (your PC) --SRT/RTMP--> MediaMTX --FFmpeg -c copy--> Twitch
 
 [MediaMTX](https://github.com/bluenviron/mediamtx) accepts the publisher. A tiny FastAPI process watches that path and starts one `ffmpeg -c copy` per enabled destination. CPU stays near idle; the limiter is **egress bandwidth**, not cores.
 
-Admin UI: `http://<host>:8080` (HTTP basic auth). Paste stream keys, toggle platforms, watch a local HLS preview.
+Admin UI: `https://relaycast.brazooka.games` (cookie login). Local: `http://localhost:8080`. Paste stream keys, toggle platforms, watch a local HLS preview.
 
 ## Local (this is the “VM”)
 

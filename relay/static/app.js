@@ -2,6 +2,10 @@ const $ = (sel) => document.querySelector(sel);
 
 let lastHls = "";
 let hls;
+let lastStatus = null;
+let connOpen = false;
+const editing = new Set();
+const editData = {};
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -20,7 +24,7 @@ async function api(path, opts = {}) {
 }
 
 function copy(text) {
-  navigator.clipboard.writeText(text);
+  if (text) navigator.clipboard.writeText(text);
 }
 
 function esc(value) {
@@ -61,7 +65,7 @@ function preview(url) {
 function previewUrl(s) {
   const path = (s.path || "").replace(/^\/+/, "");
   if (!s.publishing || !path) return "";
-  return `http://${location.hostname}:8888/${path}/index.m3u8`;
+  return `/hls/${path}/index.m3u8`;
 }
 
 function fmtBytes(n) {
@@ -71,52 +75,204 @@ function fmtBytes(n) {
   return `${(x / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function card(d) {
-  const sending = d.sending || "off";
-  const intent = !d.enabled ? "off" : d.hold ? "hold" : "live";
-  const dot = sending === "hold" ? "hold" : d.pushing ? "push" : d.last_error && d.enabled ? "err" : "";
-  const meta = sending === "hold"
-    ? (d.hold ? "holding · slate" : "holding · Action! down")
-    : d.pushing
-      ? (d.transcode ? "transcoding for Kick" : "copying to platform")
-      : d.last_error
-        ? d.last_error
-        : sending === "live"
-          ? (d.transcode ? "transcoding for Kick…" : "connecting…")
-          : d.enabled
-            ? "waiting for ingest"
-            : "off";
+function intentOf(d) {
+  return !d.enabled ? "off" : d.hold ? "hold" : "live";
+}
 
-  const keyPh = d.has_key ? `saved ·${d.key_tail}` : "stream key";
-  const del = d.builtin ? "" : `<button data-del="${esc(d.id)}">remove</button>`;
+function dotOf(d) {
+  const sending = d.sending || "off";
+  if (sending === "hold") return "hold";
+  if (d.pushing) return "push";
+  if (d.last_error && d.enabled) return "err";
+  return "";
+}
+
+function kickSizeOf(s, d) {
+  const fromDest = d && d.kickTranscode;
+  const raw = fromDest || (s && s.kickTranscode) || "720p60";
+  return raw === "1080p60" ? "1080p60" : "720p60";
+}
+
+function metaOf(d) {
+  const sending = d.sending || "off";
+  const size = kickSizeOf(lastStatus, d);
+  if (sending === "hold") return d.hold ? "holding · slate" : "holding · Action! down";
+  if (d.pushing) return d.transcode ? `transcoding Kick · ${size}` : "copying to platform";
+  if (d.last_error) return d.last_error;
+  if (sending === "live") return d.transcode ? `transcoding Kick · ${size}…` : "connecting…";
+  if (!d.has_ingest || !d.has_key) return "set URL and key in edit";
+  if (d.enabled) return "waiting for ingest";
+  return "off";
+}
+
+function spark(svg, hist) {
+  if (!svg) return;
+  const w = 60;
+  const h = 18;
+  const vals = Array.isArray(hist) ? hist : [];
+  if (!vals.length) {
+    svg.innerHTML = "";
+    return;
+  }
+  const pts = vals.map((v, i) => {
+    const x = vals.length <= 1 ? 0 : (i / (vals.length - 1)) * w;
+    const y = h - 0.6 - (Math.max(0, Math.min(100, Number(v) || 0)) / 100) * (h - 1.2);
+    return [x, y];
+  });
+  const line = pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const last = pts[pts.length - 1];
+  const area = `0,${h} ${line} ${last[0].toFixed(2)},${h}`;
+  svg.innerHTML = `<polygon points="${area}" /><polyline points="${line}" />`;
+}
+
+function paintHost(s) {
+  const host = s.host || {};
+  const cpuEl = $("#cpu-pct");
+  const memEl = $("#mem-pct");
+  const cpu = Number(host.cpu);
+  const mem = Number(host.mem);
+  cpuEl.textContent = Number.isFinite(cpu) ? `${Math.round(cpu)}%` : "—";
+  memEl.textContent = Number.isFinite(mem) ? `${Math.round(mem)}%` : "—";
+  cpuEl.classList.toggle("hot", Number.isFinite(cpu) && cpu >= 85);
+  memEl.classList.toggle("hot", Number.isFinite(mem) && mem >= 90);
+  spark($("#cpu-spark"), host.cpuHist);
+  spark($("#mem-spark"), host.memHist);
+  paintCores(host.cores);
+}
+
+function paintCores(cores) {
+  const box = $("#cpu-cores");
+  if (!box) return;
+  const rows = Array.isArray(cores) ? cores : [];
+  box.innerHTML = rows.map((c, i) => {
+    const pct = Math.max(0, Math.min(100, Number(c && c.cpu) || 0));
+    return `<div class="core"><span>${i}</span><span class="bar"><i class="${pct >= 85 ? "hot" : ""}" style="width:${pct.toFixed(0)}%"></i></span><strong>${Math.round(pct)}%</strong></div>`;
+  }).join("");
+}
+
+function fillConn(s) {
+  if (!s || !connOpen) return;
+  $("#rtmpServer").textContent = s.rtmpServer || "";
+}
+
+function editFields(d) {
+  const ed = editData[d.id] || {};
+  const keyPh = d.has_key ? "stream key saved — paste to replace" : "stream key";
+  const del = d.builtin ? "" : `<button type="button" data-del="${esc(d.id)}">remove</button>`;
+  const docs = ed.docs || d.docs || "";
+  const help = ed.help ? `<p class="hint">${esc(ed.help)}</p>` : "";
   return `
-    <article class="card" data-id="${esc(d.id)}">
-      <div class="card-top">
-        <div>
-          <div class="name">${esc(d.name)}</div>
-          <div class="meta ${d.last_error && d.enabled ? "err" : ""}">${esc(meta)}</div>
-        </div>
-        <div class="modes">
-          <span class="dot ${dot}"></span>
-          <button type="button" data-mode="off" data-id="${esc(d.id)}" class="${intent === "off" ? "on" : ""}">off</button>
-          <button type="button" data-mode="live" data-id="${esc(d.id)}" class="${intent === "live" ? "on" : ""}">live</button>
-          <button type="button" data-mode="hold" data-id="${esc(d.id)}" class="${intent === "hold" ? "on" : ""}">hold</button>
-        </div>
-      </div>
+    <div class="edit-panel">
+      ${help}
       <div class="fields">
         <label>ingest URL
-          <input type="text" data-ingest="${esc(d.id)}" value="${esc(d.ingest || "")}" placeholder="rtmp(s)://…" />
+          <input type="text" data-ingest="${esc(d.id)}" value="${esc(ed.ingest || "")}" placeholder="rtmp(s)://…" autocomplete="off" />
         </label>
         <label>stream key
           <input type="password" data-key="${esc(d.id)}" value="" placeholder="${esc(keyPh)}" autocomplete="off" />
         </label>
       </div>
       <div class="row-actions">
-        <button data-save="${esc(d.id)}">save</button>
-        ${d.docs ? `<a href="${esc(d.docs)}" target="_blank" rel="noreferrer"><button type="button">dashboard</button></a>` : ""}
+        <button type="button" data-save="${esc(d.id)}">save</button>
+        ${docs ? `<a href="${esc(docs)}" target="_blank" rel="noreferrer"><button type="button">dashboard</button></a>` : ""}
         ${del}
       </div>
+    </div>`;
+}
+
+function card(d) {
+  const intent = intentOf(d);
+  const open = editing.has(d.id);
+  const size = kickSizeOf(lastStatus, d);
+  const sizes = d.id === "kick" ? `
+      <div class="sizes" role="group" aria-label="Kick transcode size">
+        <button type="button" data-kick-size="720p60" class="${size === "720p60" ? "on" : ""}">720p60</button>
+        <button type="button" data-kick-size="1080p60" class="${size === "1080p60" ? "on" : ""}">1080p60</button>
+      </div>` : "";
+  return `
+    <article class="card" data-id="${esc(d.id)}">
+      <div class="card-top">
+        <div>
+          <div class="name-row"><span class="dot ${dotOf(d)}"></span><div class="name">${esc(d.name)}</div></div>
+          <div class="meta ${d.last_error && d.enabled ? "err" : ""}">${esc(metaOf(d))}</div>
+        </div>
+        <button type="button" class="edit-btn ${open ? "on" : ""}" data-edit="${esc(d.id)}">${open ? "close" : "edit"}</button>
+      </div>
+      <div class="modes">
+        <button type="button" data-mode="off" data-id="${esc(d.id)}" class="${intent === "off" ? "on" : ""}">off</button>
+        <button type="button" data-mode="live" data-id="${esc(d.id)}" class="${intent === "live" ? "on" : ""}">live</button>
+        <button type="button" data-mode="hold" data-id="${esc(d.id)}" class="${intent === "hold" ? "on" : ""}">hold</button>
+      </div>
+      ${sizes}
+      ${open ? editFields(d) : ""}
     </article>`;
+}
+
+function bindDest() {
+  const root = $("#dest-list");
+  root.querySelectorAll("[data-save]").forEach((btn) => {
+    btn.onclick = () => save(btn.dataset.save).catch((e) => alert(e.message));
+  });
+  root.querySelectorAll("[data-mode]").forEach((btn) => {
+    btn.onclick = () => setMode(btn.dataset.id, btn.dataset.mode).catch((e) => alert(e.message));
+  });
+  root.querySelectorAll("[data-kick-size]").forEach((btn) => {
+    btn.onclick = () => setKickSize(btn.dataset.kickSize).catch((e) => alert(e.message));
+  });
+  root.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.onclick = () => toggleEdit(btn.dataset.edit).catch((e) => alert(e.message));
+  });
+  root.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm("remove this destination?")) return;
+      await api(`/api/destinations/${btn.dataset.del}`, { method: "DELETE" });
+      editing.delete(btn.dataset.del);
+      delete editData[btn.dataset.del];
+      tick();
+    };
+  });
+}
+
+let lastDestIds = "";
+
+function paintDests(s, force) {
+  const root = $("#dest-list");
+  const ids = (s.destinations || []).map((d) => d.id).join("\0");
+  const canPatch = !force && ids === lastDestIds && root.querySelector(".card");
+  if (canPatch) {
+    for (const d of s.destinations) {
+      const el = root.querySelector(`.card[data-id="${d.id}"]`);
+      if (!el) continue;
+      const meta = el.querySelector(".meta");
+      const dot = el.querySelector(".dot");
+      meta.textContent = metaOf(d);
+      meta.classList.toggle("err", Boolean(d.last_error && d.enabled));
+      if (dot) dot.className = `dot ${dotOf(d)}`;
+      const intent = intentOf(d);
+      el.querySelectorAll("[data-mode]").forEach((btn) => {
+        btn.classList.toggle("on", btn.dataset.mode === intent);
+      });
+      const size = kickSizeOf(s, d);
+      el.querySelectorAll("[data-kick-size]").forEach((btn) => {
+        btn.classList.toggle("on", btn.dataset.kickSize === size);
+      });
+    }
+    return;
+  }
+  lastDestIds = ids;
+  root.innerHTML = s.destinations.map(card).join("");
+  bindDest();
+}
+
+async function toggleEdit(id) {
+  if (editing.has(id)) {
+    editing.delete(id);
+    paintDests(lastStatus, true);
+    return;
+  }
+  editData[id] = await api(`/api/destinations/${id}`);
+  editing.add(id);
+  paintDests(lastStatus, true);
 }
 
 async function save(id) {
@@ -125,11 +281,18 @@ async function save(id) {
   const body = { ingest };
   if (key) body.key = key;
   await api(`/api/destinations/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  editing.delete(id);
+  delete editData[id];
   await tick();
 }
 
 async function setMode(id, mode) {
   await api(`/api/destinations/${id}`, { method: "PATCH", body: JSON.stringify({ mode }) });
+  await tick();
+}
+
+async function setKickSize(size) {
+  await api("/api/settings", { method: "PATCH", body: JSON.stringify({ kick_transcode: size }) });
   await tick();
 }
 
@@ -140,6 +303,10 @@ function showSlate(s) {
   const meta = $("#standby-meta");
   const auto = $("#auto-hold");
   if (document.activeElement !== auto) auto.checked = !!s.autoHold;
+  const hint = $("#kick-hint");
+  if (hint) {
+    hint.textContent = `Looping still or clip while platforms stay online. Kick live is transcoded to ${kickSizeOf(s)}; everything else is copy.`;
+  }
   if (!s.hasStandby) {
     img.hidden = true;
     vid.hidden = true;
@@ -170,6 +337,7 @@ function showSlate(s) {
 
 async function tick() {
   const s = await api("/api/status");
+  lastStatus = s;
   const pill = $("#pill");
   if (s.holding) {
     pill.textContent = "hold";
@@ -181,38 +349,34 @@ async function tick() {
     pill.textContent = "standby";
     pill.className = "pill off";
   }
-  $("#st-live").textContent = s.publishing ? `live · ${s.path}` : "no publisher";
+  $("#st-live").textContent = s.publishing ? "live" : "no publisher";
   $("#st-tracks").textContent = (s.tracks || []).join(", ") || "—";
   $("#st-bytes").textContent = s.publishing ? fmtBytes(s.bytesReceived) : "—";
   $("#st-mtx").textContent = s.mediamtx ? "mediamtx up" : "waiting for mediamtx";
-  $("#rtmpServer").textContent = s.rtmpServer;
-  $("#rtmpKey").textContent = s.rtmpKey;
-  $("#srtUrl").textContent = s.srtUrl;
-  document.querySelector("[data-copy=rtmpServer]").onclick = () => copy(s.rtmpServer);
-  document.querySelector("[data-copy=rtmpKey]").onclick = () => copy(s.rtmpKey);
-  document.querySelector("[data-copy=srt]").onclick = () => copy(s.srtUrl);
+  paintHost(s);
+  fillConn(s);
   if (s.publishing) preview(previewUrl(s));
   else preview("");
   showSlate(s);
-  const focus = document.activeElement;
-  const editing = focus && focus.matches("input[type=text], input[type=password]");
-  if (!editing) {
-    $("#dest-list").innerHTML = s.destinations.map(card).join("");
-    $("#dest-list").querySelectorAll("[data-save]").forEach((btn) => {
-      btn.onclick = () => save(btn.dataset.save).catch((e) => alert(e.message));
-    });
-    $("#dest-list").querySelectorAll("[data-mode]").forEach((btn) => {
-      btn.onclick = () => setMode(btn.dataset.id, btn.dataset.mode).catch((e) => alert(e.message));
-    });
-    $("#dest-list").querySelectorAll("[data-del]").forEach((btn) => {
-      btn.onclick = async () => {
-        if (!confirm("remove this destination?")) return;
-        await api(`/api/destinations/${btn.dataset.del}`, { method: "DELETE" });
-        tick();
-      };
-    });
-  }
+  paintDests(s, false);
 }
+
+$("#conn-toggle").onclick = () => {
+  connOpen = !connOpen;
+  $("#conn-panel").hidden = !connOpen;
+  $("#conn-toggle").textContent = connOpen ? "hide connection" : "connection";
+  fillConn(lastStatus);
+};
+async function copyConn(field) {
+  const c = await api("/api/connection");
+  copy(c[field]);
+}
+document.querySelector("[data-copy=rtmpServer]").onclick = () => {
+  if (lastStatus && lastStatus.rtmpServer) copy(lastStatus.rtmpServer);
+  else copyConn("rtmpServer").catch((e) => alert(e.message));
+};
+document.querySelector("[data-copy=rtmpKey]").onclick = () => copyConn("rtmpKey").catch((e) => alert(e.message));
+document.querySelector("[data-copy=srt]").onclick = () => copyConn("srtUrl").catch((e) => alert(e.message));
 
 $("#add-btn").onclick = () => $("#add-dlg").showModal();
 $("#add-form").onsubmit = async (ev) => {
@@ -237,7 +401,7 @@ $("#add-form").onsubmit = async (ev) => {
 };
 
 tick();
-setInterval(tick, 1500);
+setInterval(tick, 1000);
 
 $("#hold-all").onclick = () =>
   api("/api/hold-all", { method: "POST", body: JSON.stringify({ hold: true }) }).then(tick).catch((e) => alert(e.message));

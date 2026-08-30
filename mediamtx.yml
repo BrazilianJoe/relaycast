@@ -16,10 +16,9 @@ moq: no
 hls: yes
 hlsAddress: :8888
 hlsAllowOrigins: ["*"]
-hlsVariant: lowLatency
-hlsSegmentCount: 4
+hlsVariant: mpegts
+hlsSegmentCount: 7
 hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
 hlsMuxerCloseAfter: 15s
 
 rtmp: yes

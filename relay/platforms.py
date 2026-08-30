@@ -44,7 +44,7 @@ DESTINATIONS = [
         "key": "",
         "enabled": False,
         "hold": False,
-        "help": "Creator Dashboard → Stream URL & Key. Paste the Stream URL exactly; we add :443/app if Kick omitted it. Live Kick is transcoded (2s GOP, 48 kHz AAC); other dests stay copy.",
+        "help": "Creator Dashboard → Stream URL & Key. Paste the Stream URL exactly; we add :443/app if Kick omitted it. Live Kick is transcoded (720p60 or 1080p60, 2s GOP); other dests stay copy.",
         "docs": "https://kick.com/dashboard/settings/stream",
         "builtin": True,
     },

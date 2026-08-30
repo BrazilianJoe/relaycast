@@ -1,0 +1,4 @@
+relaycast.brazooka.games {
+  encode gzip
+  reverse_proxy relay:8080
+}
