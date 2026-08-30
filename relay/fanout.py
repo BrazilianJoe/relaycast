@@ -1,4 +1,5 @@
-"""Copy-only FFmpeg fan-out. Hold mode encodes a looping slate once, then copies."""
+"""FFmpeg fan-out. Destinations copy the ingest bitstream except Kick live,
+which is transcoded so IVS gets a 2s GOP. Hold encodes a looping slate once, then copies."""
 
 from __future__ import annotations
 
@@ -83,6 +84,7 @@ class DestState:
     mode: str = ""
     source: str = ""
     target: str = ""
+    transcode: bool = False
     lines: Deque[str] = field(default_factory=lambda: deque(maxlen=80))
 
 
@@ -105,6 +107,7 @@ class Fanout:
                     "last_error": st.last_error,
                     "last_start": st.last_start,
                     "mode": st.mode,
+                    "transcode": st.transcode,
                     "log": list(st.lines)[-12:],
                 }
             return out
@@ -163,11 +166,11 @@ class Fanout:
     def _start(self, dest_id: str, dest: dict, mode: str, source: str) -> None:
         target = join_rtmp(dest.get("ingest", ""), dest.get("key", ""))
         st = self._state.setdefault(dest_id, DestState())
-        gap = 8.0 if _kick_target(dest_id, target) else 1.5
+        gap = 8.0 if kick_target(dest_id, target) else 1.5
         if st.last_start and time.time() - st.last_start < gap:
             return
         url = f"{SOURCE_BASE.rstrip('/')}/{source}"
-        cmd = _ffmpeg_out(url, target, dest_id)
+        cmd = _ffmpeg_out(url, target, dest_id, mode)
         if not self._spawn(dest_id, cmd, st):
             return
         proc = self._procs[dest_id]
@@ -177,8 +180,10 @@ class Fanout:
         st.mode = mode
         st.source = source
         st.target = target
+        st.transcode = kick_target(dest_id, target) and mode == "live"
         st.restarts += 1
-        st.lines.append(f"{mode} pid={proc.pid} src={source}")
+        kind = "transcode" if st.transcode else "copy"
+        st.lines.append(f"{mode} {kind} pid={proc.pid} src={source}")
         threading.Thread(target=self._drain, args=(dest_id, proc), daemon=True).start()
 
     def _ensure_slate(self, standby_file: Path | None) -> None:
@@ -264,6 +269,7 @@ class Fanout:
         st.pid = None
         st.mode = ""
         st.source = ""
+        st.transcode = False
         if proc is None:
             return
         if proc.poll() is None:
@@ -276,12 +282,16 @@ class Fanout:
         st.lines.append("stopped")
 
 
-def _kick_target(dest_id: str, target: str) -> bool:
+def kick_target(dest_id: str, target: str) -> bool:
     return dest_id == "kick" or "global-contribute.live-video.net" in (target or "").lower()
 
 
-def _ffmpeg_out(source: str, target: str, dest_id: str) -> list[str]:
-    """Twitch stays copy-only. Kick IVS wants 48 kHz AAC and SPS/PPS on keyframes."""
+def _kick_audio() -> list[str]:
+    return ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+
+
+def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live") -> list[str]:
+    """Twitch and hold/slate stay copy. Kick live is transcoded for IVS (2s GOP, no B-frames)."""
     cmd = [
         "ffmpeg",
         "-hide_banner",
@@ -297,21 +307,37 @@ def _ffmpeg_out(source: str, target: str, dest_id: str) -> list[str]:
         "-map",
         "0:a:0?",
     ]
-    if _kick_target(dest_id, target):
+    if kick_target(dest_id, target) and mode == "live":
+        # 1 OCPU Ampere: ultrafast + no B-frames. force_key_frames is fps-agnostic.
         cmd += [
             "-c:v",
-            "copy",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-tune",
+            "zerolatency",
+            "-profile:v",
+            "high",
+            "-pix_fmt",
+            "yuv420p",
+            "-bf",
+            "0",
+            "-force_key_frames",
+            "expr:gte(t,n_forced*2)",
+            "-x264-params",
+            "scenecut=0:bframes=0:open_gop=0:aud=1",
+            "-b:v",
+            "6000k",
+            "-maxrate",
+            "6000k",
+            "-bufsize",
+            "6000k",
             "-bsf:v",
             "dump_extra",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
+            *_kick_audio(),
         ]
+    elif kick_target(dest_id, target):
+        cmd += ["-c:v", "copy", "-bsf:v", "dump_extra", *_kick_audio()]
     else:
         cmd += ["-c", "copy"]
     cmd += ["-f", "flv", "-flvflags", "no_duration_filesize", target]

@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import store
-from fanout import IMAGE_EXT, VIDEO_EXT, Fanout, dest_mode, join_rtmp, normalize_ingest
+from fanout import IMAGE_EXT, VIDEO_EXT, Fanout, dest_mode, join_rtmp, kick_target, normalize_ingest
 
 PUBLISH_KEY = os.environ.get("PUBLISH_KEY", "").strip()
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
@@ -173,6 +173,7 @@ def status() -> dict:
         row["restarts"] = st.get("restarts") or 0
         row["log"] = st.get("log") or []
         row["ready"] = bool(row.get("enabled") and row.get("has_key") and row.get("ingest"))
+        row["transcode"] = sending == "live" and kick_target(row["id"], row.get("ingest") or "")
         if row["id"] == "kick":
             row["ready"] = bool(row.get("enabled") and row.get("ingest") and row.get("has_key"))
     return {

@@ -78,11 +78,11 @@ function card(d) {
   const meta = sending === "hold"
     ? (d.hold ? "holding · slate" : "holding · Action! down")
     : d.pushing
-      ? "copying to platform"
+      ? (d.transcode ? "transcoding for Kick" : "copying to platform")
       : d.last_error
         ? d.last_error
         : sending === "live"
-          ? "connecting…"
+          ? (d.transcode ? "transcoding for Kick…" : "connecting…")
           : d.enabled
             ? "waiting for ingest"
             : "off";
