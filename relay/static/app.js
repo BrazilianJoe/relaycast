@@ -126,6 +126,9 @@ function editFields(d) {
         <label>stream key
           <input type="password" data-key="${esc(d.id)}" value="" placeholder="${esc(keyPh)}" autocomplete="off" />
         </label>
+        ${d.id === "rumble" ? `<label>live page
+          <input type="text" data-page="${esc(d.id)}" value="${esc(ed.page_url || "")}" placeholder="https://rumble.com/user/…/live" autocomplete="off" />
+        </label>` : ""}
       </div>
       <div class="row-actions">
         <button type="button" data-save="${esc(d.id)}">save</button>
@@ -233,8 +236,10 @@ async function toggleEdit(id) {
 async function save(id) {
   const ingest = document.querySelector(`[data-ingest="${id}"]`).value;
   const key = document.querySelector(`[data-key="${id}"]`).value;
+  const pageEl = document.querySelector(`[data-page="${id}"]`);
   const body = { ingest };
   if (key) body.key = key;
+  if (pageEl) body.page_url = pageEl.value;
   await api(`/api/destinations/${id}`, { method: "PATCH", body: JSON.stringify(body) });
   editing.delete(id);
   delete editData[id];
@@ -294,6 +299,7 @@ async function tick() {
   const s = await api("/api/status");
   lastStatus = s;
   paintPill(s);
+  paintRumbleLink(s);
   $("#st-live").textContent = s.publishing ? "live" : "no publisher";
   $("#st-tracks").textContent = (s.tracks || []).join(", ") || "—";
   $("#st-bytes").textContent = s.publishing ? fmtBytes(s.bytesReceived) : "—";

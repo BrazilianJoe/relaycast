@@ -274,6 +274,17 @@ dialog menu { display: flex; justify-content: flex-end; gap: 0.4rem; padding: 0;
   gap: 0.65rem;
   min-width: 0;
 }
+.page-link {
+  color: var(--ink);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.page-link:hover { border-color: var(--amber); color: var(--amber); }
 .clip-tools {
   display: flex;
   align-items: center;

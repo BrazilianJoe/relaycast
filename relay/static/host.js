@@ -59,6 +59,19 @@ function paintPill(s) {
   }
 }
 
+function paintRumbleLink(s) {
+  const a = document.getElementById("rumble-live-link");
+  if (!a) return;
+  const url = (s && s.rumblePageUrl) || "";
+  if (!url) {
+    a.hidden = true;
+    a.removeAttribute("href");
+    return;
+  }
+  a.hidden = false;
+  a.href = url;
+}
+
 async function tickHost() {
   try {
     const res = await fetch("/api/status");
@@ -66,6 +79,7 @@ async function tickHost() {
     const s = await res.json();
     paintHost(s);
     paintPill(s);
+    paintRumbleLink(s);
   } catch {
     /* ignore */
   }

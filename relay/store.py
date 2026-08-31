@@ -6,6 +6,7 @@ import re
 import threading
 from copy import deepcopy
 from pathlib import Path
+from urllib.parse import urlparse
 
 from platforms import DESTINATIONS
 
@@ -25,6 +26,16 @@ def kick_transcode(cfg: dict | None = None) -> str:
     return "720p60"
 
 
+def normalize_page_url(raw: str) -> str:
+    url = (raw or "").strip()
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("page URL must be http(s)")
+    return url[:300]
+
+
 def _seed() -> dict:
     return {
         "auto_hold": True,
@@ -42,9 +53,12 @@ def load() -> dict:
         return cfg
     with CONFIG_PATH.open() as fh:
         cfg = json.load(fh)
+    had_rumble_page = any(
+        d.get("id") == "rumble" and "page_url" in d for d in cfg.get("destinations", [])
+    )
     missing = "kick_transcode" not in cfg
     cfg = _merge_builtins(cfg)
-    if missing:
+    if missing or not had_rumble_page:
         _write(cfg)
     return cfg
 
@@ -89,6 +103,7 @@ def public_copy(cfg: dict) -> dict:
                 "has_ingest": bool(item.get("ingest")),
                 "docs": item.get("docs") or "",
                 "builtin": bool(item.get("builtin")),
+                "pageUrl": item.get("page_url") or "",
             }
         )
     return out
@@ -115,6 +130,11 @@ def _merge_builtins(cfg: dict) -> dict:
         row["key"] = prev.get("key", "")
         row["enabled"] = bool(prev.get("enabled", False))
         row["hold"] = bool(prev.get("hold", False))
+        if "page_url" in stock:
+            if "page_url" in prev:
+                row["page_url"] = str(prev.get("page_url") or "")
+            else:
+                row["page_url"] = stock.get("page_url") or ""
         merged.append(row)
     for dest_id, prev in existing.items():
         if dest_id in seen:

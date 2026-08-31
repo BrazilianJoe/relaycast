@@ -55,8 +55,9 @@ DESTINATIONS = [
         "key": "",
         "enabled": False,
         "hold": False,
-        "help": "Brazil cannot open rumble.com. Use the rumble button (Firefox on this US box), copy Stream URL + key from Studio, paste here. Prefer a static key.",
+        "help": "Brazil cannot open rumble.com. Use rumble (US Firefox). Static key + live template. Live page is the stable /user/…/live URL, not a per-video link.",
         "docs": "/rumble",
+        "page_url": "https://rumble.com/user/unfilteredgoblin/live",
         "builtin": True,
     },
 ]

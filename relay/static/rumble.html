@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>rumble · relaycast</title>
-  <link rel="stylesheet" href="/static/app.css?v=10" />
+  <link rel="stylesheet" href="/static/app.css?v=11" />
 </head>
 <body class="rumble-page" data-host-tick="1">
   <header class="top">
@@ -31,6 +31,7 @@
       </div>
     </div>
     <div class="top-end">
+      <a id="rumble-live-link" class="page-link" hidden target="_blank" rel="noreferrer">live page</a>
       <div class="clip-tools">
         <button type="button" id="arm" title="Copy on this PC, click the desktop, paste with Ctrl+V. Copy in Rumble, then Ctrl+C lands on this PC.">clipboard</button>
         <details class="rumble-fallback">
@@ -332,6 +333,6 @@
     desk.addEventListener("load", startHooking);
     startHooking();
   </script>
-  <script src="/static/host.js?v=1"></script>
+  <script src="/static/host.js?v=2"></script>
 </body>
 </html>

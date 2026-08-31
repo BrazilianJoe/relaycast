@@ -355,6 +355,11 @@ def status() -> dict:
         if row["id"] == "kick":
             row["ready"] = bool(row.get("enabled") and row.get("has_ingest") and row.get("has_key"))
             row["kickTranscode"] = kick_size
+    rumble_page = ""
+    for d in dests:
+        if d.get("id") == "rumble":
+            rumble_page = d.get("page_url") or ""
+            break
     return {
         "publishing": _publishing,
         "holding": holding_any,
@@ -368,6 +373,7 @@ def status() -> dict:
         "kickTranscode": kick_size,
         "hasStandby": pub["has_standby"],
         "standbyName": pub["standby_name"],
+        "rumblePageUrl": rumble_page,
         "destinations": pub["destinations"],
         "host": _host_payload(),
     }
@@ -399,6 +405,7 @@ def get_destination(dest_id: str) -> dict:
         "docs": dest.get("docs") or "",
         "builtin": bool(dest.get("builtin")),
         "help": dest.get("help") or "",
+        "page_url": dest.get("page_url") or "",
     }
 
 
@@ -420,6 +427,13 @@ async def update_destination(dest_id: str, request: Request) -> dict:
             incoming = str(body["key"])
             if incoming and incoming not in ("********", "••••"):
                 dest["key"] = incoming.strip()
+        if "page_url" in body:
+            if dest.get("id") != "rumble":
+                raise HTTPException(400, "page URL is only for rumble")
+            try:
+                dest["page_url"] = store.normalize_page_url(str(body.get("page_url") or ""))
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         if "enabled" in body:
             dest["enabled"] = bool(body["enabled"])
         if "hold" in body:
