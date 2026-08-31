@@ -62,6 +62,8 @@ services:
       DISPLAY_WIDTH: "1280"
       DISPLAY_HEIGHT: "800"
       WEB_AUDIO: "0"
+      WEB_HOST_CLIPBOARD_SYNC: "0"
+      XVNC_SERVER_CUSTOM_PARAMS: "-AcceptSetDesktopSize=0"
       FF_OPEN_URL: https://rumble.com
     volumes:
       - firefox_data:/config
