@@ -12,18 +12,33 @@ from platforms import DESTINATIONS
 
 DATA_DIR = Path(os.environ.get("RELAY_DATA", "/data"))
 CONFIG_PATH = DATA_DIR / "config.json"
-KICK_SIZES = ("720p60", "1080p60")
+KICK_SIZES = ("copy", "720p60", "1080p60")
+KICK_COPY_ALIASES = {"copy", "off", "none", "false", "0"}
 DEFAULT_KICK_TRANSCODE = "720p60"
 
 _lock = threading.Lock()
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,40}$")
 
 
-def kick_transcode(cfg: dict | None = None) -> str:
-    raw = str((cfg or {}).get("kick_transcode") or DEFAULT_KICK_TRANSCODE).strip().lower()
-    if raw in ("1080", "1080p", "1080p60"):
+def parse_kick_transcode(raw: str | None) -> str | None:
+    value = str(raw or "").strip().lower()
+    if value in KICK_COPY_ALIASES:
+        return "copy"
+    if value in ("1080", "1080p", "1080p60"):
         return "1080p60"
-    return "720p60"
+    if value in ("720", "720p", "720p60"):
+        return "720p60"
+    return None
+
+
+def kick_transcode(cfg: dict | None = None) -> str:
+    return parse_kick_transcode((cfg or {}).get("kick_transcode")) or DEFAULT_KICK_TRANSCODE
+
+
+def kick_live_size(mode: str) -> str:
+    """Empty means Kick live is copy-only."""
+    parsed = parse_kick_transcode(mode) or DEFAULT_KICK_TRANSCODE
+    return "" if parsed == "copy" else parsed
 
 
 def normalize_page_url(raw: str) -> str:

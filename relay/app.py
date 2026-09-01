@@ -351,7 +351,11 @@ def status() -> dict:
         row["last_error"] = st.get("last_error") or ""
         row["restarts"] = st.get("restarts") or 0
         row["ready"] = bool(row.get("enabled") and row.get("has_key") and row.get("has_ingest"))
-        row["transcode"] = sending == "live" and kick_target(row["id"], raw.get("ingest") or "")
+        row["transcode"] = (
+            sending == "live"
+            and kick_target(row["id"], raw.get("ingest") or "")
+            and bool(store.kick_live_size(kick_size))
+        )
         if row["id"] == "kick":
             row["ready"] = bool(row.get("enabled") and row.get("has_ingest") and row.get("has_key"))
             row["kickTranscode"] = kick_size
@@ -527,9 +531,10 @@ async def update_settings(request: Request) -> dict:
             cfg["auto_hold"] = bool(body["auto_hold"])
         if "kick_transcode" in body:
             raw = str(body.get("kick_transcode") or "").strip().lower()
-            if raw not in store.KICK_SIZES:
-                raise HTTPException(400, "kick_transcode must be 720p60 or 1080p60")
-            cfg["kick_transcode"] = raw
+            parsed = store.parse_kick_transcode(raw)
+            if parsed not in store.KICK_SIZES:
+                raise HTTPException(400, "kick_transcode must be copy, 720p60, or 1080p60")
+            cfg["kick_transcode"] = parsed
         store.save(cfg)
     _kick_fanout()
     return {"ok": True}

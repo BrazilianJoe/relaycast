@@ -1,6 +1,7 @@
-"""FFmpeg fan-out. Destinations copy the ingest bitstream except Kick live,
-which is transcoded so IVS gets a 2s GOP. Kick live is 720p60 or 1080p60
-ultrafast. Hold encodes a looping slate once, then copies."""
+"""FFmpeg fan-out. Destinations copy the ingest bitstream. Kick live may
+transcode (720p60 or 1080p60 ultrafast, 2s GOP) so IVS stays happy when
+OBS GOP is wrong; copy skips that encode. Hold encodes a looping slate
+once, then copies."""
 
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Deque
 from urllib.parse import urlparse, urlunparse
+
+import store
 
 SOURCE_BASE = os.environ.get("MEDIAMTX_RTMP", "rtmp://mediamtx:1935")
 SLATE_PATH = "standby"
@@ -126,7 +129,7 @@ class Fanout:
         standby_file: Path | None,
         kick_transcode: str = "720p60",
     ) -> None:
-        self._kick_size = "1080p60" if kick_transcode == "1080p60" else "720p60"
+        self._kick_size = store.kick_live_size(kick_transcode)
         plan: dict[str, tuple[str, str, str]] = {}
         by_id = {d["id"]: d for d in destinations if "id" in d}
         for dest in destinations:
@@ -382,8 +385,8 @@ def _ffmpeg_out(source: str, target: str, dest_id: str, mode: str = "live", kick
         "-map",
         "0:a:0?",
     ]
-    if kick_target(dest_id, target) and mode == "live":
-        cmd += [*_kick_live_video(kick_size or "720p60"), "-c:a", "copy"]
+    if kick_target(dest_id, target) and mode == "live" and kick_size:
+        cmd += [*_kick_live_video(kick_size), "-c:a", "copy"]
     elif kick_target(dest_id, target):
         cmd += ["-c:v", "copy", "-bsf:v", "dump_extra", "-c:a", "copy"]
     else:

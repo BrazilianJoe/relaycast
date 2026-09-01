@@ -90,6 +90,7 @@ function dotOf(d) {
 function kickSizeOf(s, d) {
   const fromDest = d && d.kickTranscode;
   const raw = fromDest || (s && s.kickTranscode) || "720p60";
+  if (raw === "copy" || raw === "off") return "copy";
   return raw === "1080p60" ? "1080p60" : "720p60";
 }
 
@@ -143,7 +144,8 @@ function card(d) {
   const open = editing.has(d.id);
   const size = kickSizeOf(lastStatus, d);
   const sizes = d.id === "kick" ? `
-      <div class="sizes" role="group" aria-label="Kick transcode size">
+      <div class="sizes" role="group" aria-label="Kick encode">
+        <button type="button" data-kick-size="copy" class="${size === "copy" ? "on" : ""}">copy</button>
         <button type="button" data-kick-size="720p60" class="${size === "720p60" ? "on" : ""}">720p60</button>
         <button type="button" data-kick-size="1080p60" class="${size === "1080p60" ? "on" : ""}">1080p60</button>
       </div>` : "";
@@ -265,7 +267,10 @@ function showSlate(s) {
   if (document.activeElement !== auto) auto.checked = !!s.autoHold;
   const hint = $("#kick-hint");
   if (hint) {
-    hint.textContent = `Looping still or clip while platforms stay online. Kick live is transcoded to ${kickSizeOf(s)}; everything else is copy.`;
+    const size = kickSizeOf(s);
+    hint.textContent = size === "copy"
+      ? "Looping still or clip while platforms stay online. Kick copies OBS like the others (needs 2s keyframes, no B-frames)."
+      : `Looping still or clip while platforms stay online. Kick live is transcoded to ${size}; everything else is copy.`;
   }
   if (!s.hasStandby) {
     img.hidden = true;

@@ -233,7 +233,7 @@ input[type="text"], input[type="password"] {
 .modes button[data-mode="off"].on { border-color: var(--off); color: var(--muted); background: transparent; }
 .sizes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 0.35rem;
   margin-top: 0.4rem;
 }
